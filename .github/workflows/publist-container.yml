@@ -1,0 +1,41 @@
+name: Build and publish Docker container
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set image name
+        run: |
+          echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}:2.2.1-r1" >> "$GITHUB_ENV"
+
+      - name: Log in to GitHub Container Registry
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '%s' "$GH_TOKEN" |
+            docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+
+      - name: Build image
+        run: |
+          docker build \
+            --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+            --tag "$IMAGE" .
+
+      - name: Check installed packages and shell
+        run: |
+          docker run --rm "$IMAGE" bash -c \
+            'set -e; dpkg-query -W apt-utils procps; command -v ps; test -d /opt/scrubber/bin'
+
+      - name: Publish image
+        run: docker push "$IMAGE"
